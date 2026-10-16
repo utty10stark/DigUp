@@ -285,6 +285,13 @@ public final class IndexStore {
                   .int(id)])
     }
 
+    /// The id of the file at `path`, if the index has it.
+    public func fileID(at path: String) -> Int64? {
+        var id: Int64?
+        try? db.query("SELECT id FROM files WHERE path = ?", [.text(path)]) { id = $0.int(0) }
+        return id
+    }
+
     public func delete(_ id: Int64) throws {
         try db.run("DELETE FROM fts WHERE rowid IN (SELECT id FROM segments WHERE file = ?)", [.int(id)])
         try db.run("DELETE FROM files WHERE id = ?", [.int(id)])

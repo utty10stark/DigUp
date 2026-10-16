@@ -124,6 +124,20 @@ processor otherwise; on a processor alone a picture takes a few seconds (about f
 large photo library can take hours, which is why setup shows the time first. After that, a new file is searchable a
 few seconds after it lands.
 
+## Organise
+
+DigUp can also tidy up, which is the one thing that changes your files, so it always shows a plan first. Open
+**Organise…** from the menu bar, or **Move to Folder…** under a search in the window:
+
+- **Photos by what they show.** DigUp groups your photos by the vectors it already has and names each folder with the
+  model (Mascots, Receipts, Beach…), or sorts them into folder names you type. Photos too mixed to name stay put.
+- **From a search.** "receipts" or "boarding passes", and the strong results move into a folder you pick.
+
+Untick a group or rename its folder, then Move. Nothing is deleted or overwritten (a name that's taken gets a
+number), the index follows the files without reading them again, and **Undo** puts the last batch back. From the
+terminal: `digup organize photos <folder>`, `digup organize search <words> --to DIR`, then `digup organize apply`,
+`undo` or `history`.
+
 ## Code
 
 EmbeddingGemma 2 reads code too, so DigUp can search your projects. Code search is off until you turn it on, in

@@ -801,6 +801,69 @@ nonisolated final class Engine: @unchecked Sendable {
         return handle
     }
 
+    // MARK: Organise
+
+    /// Organising runs here (its own index connection, a serial queue), so a plan's k-means or a batch of moves never
+    /// holds up a search. Label phrases go through the query encoder on `encoderQueue` (`EncoderHop`).
+    private let organizeQueue = DispatchQueue(label: "DigUp.organize", qos: .userInitiated)
+
+    /// The folders searched, the default for organising.
+    var searchedFolders: [URL] { lock.withLock { roots } }
+
+    /// A plan for the photos under `folders` (nil: every folder searched), see `Organizer.planPhotos`.
+    func planPhotos(under folders: [URL]?, destination: URL, labels: [String]?, groups: Int?,
+                    screenshots: Bool) async -> Result<Organizer.Plan, Error> {
+        let roots = (folders ?? searchedFolders).map(\.path)
+        return await withCheckedContinuation { continuation in
+            organizeQueue.async { [self] in
+                continuation.resume(returning: Result {
+                    let store = try IndexStore(directory: indexDirectory)
+                    let encoder = EncoderHop(queue: encoderQueue) { [self] in runningEncoder() }
+                    return try Organizer.planPhotos(store, under: roots, destination: destination.path,
+                                                    embedder: encoder.isAvailable ? encoder : nil, labels: labels,
+                                                    groups: groups, kinds: screenshots ? [.image, .screenshot] : [.image])
+                })
+            }
+        }
+    }
+
+    /// A plan to move what a search finds (its strong results, or all with `everything`) into `destination`.
+    func planSearch(_ query: String, destination: URL, everything: Bool) async -> Result<Organizer.Plan, Error> {
+        let queryVector: QueryVector? = await withCheckedContinuation { continuation in
+            encoderQueue.async { [self] in continuation.resume(returning: vector(for: query, code: false)) }
+        }
+        let hits = await search(query, vector: queryVector, prefixLast: false, limit: 500)
+        return .success(Organizer.planSearch(hits, query: query, destination: destination.path, everything: everything))
+    }
+
+    /// Moves a plan's files and records the batch for undo (`Organizer.apply`).
+    func apply(_ plan: Organizer.Plan) async -> Result<Organizer.Batch, Error> {
+        await withCheckedContinuation { continuation in
+            organizeQueue.async { [self] in
+                continuation.resume(returning: Result {
+                    let batch = try Organizer.apply(plan, store: try IndexStore(directory: indexDirectory))
+                    log("organise: moved \(batch.moves.count) files (\(plan.title))")
+                    return batch
+                })
+            }
+        }
+    }
+
+    /// Puts the last batch back; nil when there's nothing to undo.
+    func undoOrganize() async -> Result<(batch: Organizer.Batch, skipped: [String])?, Error> {
+        await withCheckedContinuation { continuation in
+            organizeQueue.async { [self] in
+                continuation.resume(returning: Result {
+                    let undone = try Organizer.undo(store: try IndexStore(directory: indexDirectory))
+                    if let undone { log("organise: put back \(undone.batch.moves.count - undone.skipped.count) files") }
+                    return undone
+                })
+            }
+        }
+    }
+
+    func organizeHistory() -> [Organizer.Batch] { Organizer.loadJournal(in: indexDirectory) }
+
     // MARK: Search
 
     /// Hybrid search. Without a vector it's keyword-only (file names, OCR and document text), which is what the panel
@@ -1068,4 +1131,33 @@ nonisolated struct QueryVectorCache {
 /// dirty pages, which count against the app's footprint until something else asks for memory.
 nonisolated func returnFreedMemory() {
     malloc_zone_pressure_relief(nil, 0)
+}
+
+/// The query encoder as an `Embedder` for organising: each call hops onto the encoder's queue, which owns it.
+nonisolated final class EncoderHop: Embedder, @unchecked Sendable {
+    private let queue: DispatchQueue
+    private let worker: () -> EmbeddingWorker?
+
+    init(queue: DispatchQueue, worker: @escaping () -> EmbeddingWorker?) {
+        self.queue = queue
+        self.worker = worker
+    }
+
+    var isAvailable: Bool { queue.sync { worker() != nil } }
+
+    var info: WorkerInfo {
+        queue.sync { worker()?.info } ?? WorkerInfo(model: "none", revision: "", runtime: "", dtype: "", dim: 0,
+                                                    textOnly: true, loadSeconds: nil)
+    }
+
+    func embedTexts(_ texts: [String]) throws -> [[Float]] {
+        try queue.sync {
+            guard let worker = worker() else { throw Organizer.OrganizeError("the model isn't ready yet") }
+            return try worker.embedTexts(texts)
+        }
+    }
+
+    func embedImages(_ paths: [String], budget: Int) throws -> [Embedding] { [] }
+    func embedAudio(_ paths: [String]) throws -> [Embedding] { [] }
+    func close() {}
 }

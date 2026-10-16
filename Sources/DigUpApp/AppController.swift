@@ -19,6 +19,7 @@ final class AppController {
     private(set) var panel: SearchPanelController!
     private(set) var searchWindow: SearchWindowController!
     private(set) var settingsWindow: SettingsWindowController!
+    private(set) var organizeWindow: OrganizeWindowController!
     private(set) var statusMenu: StatusMenuController!
     private(set) var onboarding: OnboardingController?
     private var observers: [NSObjectProtocol] = []
@@ -60,10 +61,12 @@ final class AppController {
         panel = SearchPanelController(app: self)
         searchWindow = SearchWindowController(app: self)
         settingsWindow = SettingsWindowController(app: self)
+        organizeWindow = OrganizeWindowController(app: self)
         statusMenu = StatusMenuController(model: model)
         statusMenu.onSearch = { [weak self] in self?.panel.show() }
         statusMenu.onOpenWindow = { [weak self] in self?.showSearchWindow() }
         statusMenu.onSettings = { [weak self] in self?.showSettings() }
+        statusMenu.onOrganize = { [weak self] in self?.showOrganize() }
         statusMenu.onChooseFolders = { [weak self] in self?.chooseFolders() }
         statusMenu.onPauseChanged = { [weak self] paused in self?.engine.setPaused(paused) }
         statusMenu.onCheckForUpdates = { [weak self] in self?.updates.checkNow() }
@@ -277,6 +280,11 @@ final class AppController {
         settingsWindow.show(tab)
     }
 
+    /// Organise; with `query`, ready to move what that search finds.
+    func showOrganize(query: String? = nil) {
+        organizeWindow.show(query: query)
+    }
+
     func showOnboarding() {
         let onboarding = self.onboarding ?? OnboardingController(app: self)
         self.onboarding = onboarding
@@ -305,7 +313,7 @@ final class AppController {
     /// A window closed: the Dock icon goes once none is left.
     func windowClosed() {
         DispatchQueue.main.async { [self] in
-            let open = [searchWindow?.isVisible, settingsWindow?.isVisible, onboarding?.isVisible]
+            let open = [searchWindow?.isVisible, settingsWindow?.isVisible, organizeWindow?.isVisible, onboarding?.isVisible]
                 .contains { $0 == true }
             if !open {
                 NSApp.setActivationPolicy(.accessory)

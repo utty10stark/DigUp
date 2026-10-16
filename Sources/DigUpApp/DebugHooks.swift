@@ -322,6 +322,20 @@ enum DebugHooks {
                 loaded = { app.settingsWindow.state.isLoaded && sheet.choices?.estimatesDone ?? false }
                 draw = { try sheet.snapshot(to: $0) }
                 close = { sheet.end() }
+            case "organize":
+                // -debugWindow organize[:search] [-debugQuery words]: the window with a preview made.
+                let state = app.organizeWindow.state
+                app.showOrganize(query: parts.count > 1 && parts[1] == "search" ? defaults.string(forKey: "debugQuery") : nil)
+                if state.mode == .search, state.destination == nil, let first = app.engine.searchedFolders.first {
+                    state.destination = first.appendingPathComponent("Moved")
+                }
+                var asked = false
+                loaded = {
+                    if !asked, !app.engine.searchedFolders.isEmpty { asked = true; Task { await state.preview() } }
+                    return asked && state.busy == nil && (state.plan != nil || state.message != nil)
+                }
+                draw = { try app.organizeWindow.snapshot(to: $0) }
+                close = {}
             case "settings":
                 let tab = SettingsTab(rawValue: parts.count > 1 ? parts[1] : "general") ?? .general
                 app.showSettings(tab)

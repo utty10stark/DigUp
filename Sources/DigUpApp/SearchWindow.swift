@@ -464,6 +464,14 @@ struct SearchWindowView: View {
             Spacer()
             if search.hasResults, !search.query.isEmpty {
                 Text(model.resultsCaveat ?? resultCount).lineLimit(1)
+                if !search.isCode, !search.results.isEmpty {
+                    Button("Move to Folder…") {
+                        app.showOrganize(query: search.query.trimmingCharacters(in: .whitespaces))
+                    }
+                    .buttonStyle(.plain)
+                    .foregroundStyle(Brand.ember)
+                    .help("Move what this search finds into a folder, after a preview")
+                }
             }
             if let version = model.updateAvailable {
                 Button {

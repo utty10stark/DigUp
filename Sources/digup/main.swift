@@ -17,6 +17,14 @@ let usage = """
       digup search <words>... [--kind K,K] [-n 10] [--json]
                                               "code: <words>" searches the code index
       digup status                            what's in the index
+      digup organize photos <folder>... [--to DIR] [--labels A,B] [--groups N] [--screenshots]
+                                              plan folders for photos by what they show (default DIR:
+                                              <folder>/Organised), named by the model or sorted into --labels
+      digup organize search <words>... --to DIR [--kind K,K] [--all]
+                                              plan moving a search's strong results (--all: every result) to DIR
+      digup organize apply [plan.json]        move the files in the last plan shown (nothing moves before this)
+      digup organize undo [id]                put the last applied plan's files back
+      digup organize history                  plans applied, newest first
       digup speed [--model [--if-needed] [--when-quiet S] [--tries N]] [--json]
                                               this machine's speed next to the M4 Pro behind the estimates, and
                                               what indexing has measured here (costs.json in the index folder);
@@ -65,7 +73,8 @@ struct Arguments {
     var flags: Set<String> = []
     static let valued: Set<String> = ["--index", "--limit", "--kind", "-n", "--zgate", "--word-weight", "--new-limit",
                                       "--linger", "--shot-tokens", "--code-stretch", "--encoder-idle", "--to",
-                                      "--memory-limit", "--time-limit", "--tries", "--when-quiet"]
+                                      "--memory-limit", "--time-limit", "--tries", "--when-quiet", "--labels",
+                                      "--groups"]
     static let repeated: Set<String> = ["--exclude", "--exclude-ext", "--code-root", "--code-exclude"]
 
     init(_ raw: ArraySlice<String>) throws {
@@ -717,6 +726,7 @@ do {
     case "index": try index(args)
     case "search": try search(args)
     case "status": try status(args)
+    case "organize", "organise": try organize(args)
     case "speed": try speed(args)
     case "eval": try evaluate(args)
     case "index-service": exit(try indexService(args))
